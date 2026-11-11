@@ -342,7 +342,8 @@ class Battler:
     def from_packed_string(self, packed_string: str):
         team_dict = packed_to_dict(packed_string)
         for pkmn in team_dict:
-            p = Pokemon(pkmn["name"], pkmn["level"])
+            p = Pokemon(pkmn["name"], pkmn["level"], nature=pkmn["nature"] or "serious")
+            p.known_nature = pkmn["nature"]
             p.ability = pkmn["ability"]
             p.item = pkmn["item"]
             p.tera_type = pkmn["tera_type"]
@@ -603,6 +604,8 @@ class Pokemon:
         self.base_name = self.name
         self.level = level
         self.nature = nature
+        # Open-sheet facts remain fixed while hidden stat spreads are sampled.
+        self.known_nature = None
         self.evs = evs
         self.speed_range = StatRange(min=0, max=float("inf"))
         self.hidden_power_possibilities = set(POKEMON_TYPE_INDICES.keys())
@@ -748,6 +751,7 @@ class Pokemon:
         return pkmn
 
     def set_spread(self, nature, evs):
+        nature = self.known_nature or nature
         if isinstance(evs, str):
             evs = [int(e) for e in evs.split(",")]
         hp_percent = self.hp / self.max_hp

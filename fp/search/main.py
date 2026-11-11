@@ -86,6 +86,8 @@ def populate_spreads(battle: Battle, index: int):
         if pkmn.hp <= 0:
             continue
 
+        if pkmn.known_nature:
+            logger.info("\tOpen-sheet nature for %s: %s", pkmn.name, pkmn.known_nature)
         pkmn_spread = SmogonSets.get_random_spread(pkmn)
         if pkmn_spread is None:
             logger.warning("\tNo spread found for {}".format(pkmn.name))

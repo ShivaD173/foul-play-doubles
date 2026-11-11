@@ -181,3 +181,39 @@ SHOWDOWN_SIM=/absolute/path/to/showdown/dist/sim \
 This is a client parser fix; rebuilding the engine is unnecessary. The HP bar's
 color hint is accepted but is not used to refine the engine's estimated HP or
 damage-inference bounds.
+
+## Open team sheets now constrain MCTS
+
+Champions' `showteam` protocol reveals species, moves, item, ability, and nature.
+Showdown explicitly omits EVs and IVs. The client already loaded the moves,
+items, and abilities, but discarded nature and then sampled a potentially
+contradictory nature from usage data.
+
+Packed-sheet parsing now retains nature and accepts Champions sheets without a
+Tera field. Each opponent Pokemon records the revealed nature separately from
+its estimated spread. Both preview and in-battle MCTS sampling preserve that
+nature. The persistent usage/inference pool and random draws prefer spreads
+with the observed nature; if usage data lacks that nature, its EV hypotheses
+are reused with the known nature. `set_spread` also enforces the known nature,
+so another inference call cannot overwrite it.
+
+Moves, items, and abilities enter the native engine alongside that fixed nature
+and the resulting estimated stats. Ordinary battle events can still change
+current items, abilities, moves, and move availability; search does not reset
+those changes to the original sheet. EV/IV knowledge is not fabricated. The
+existing hidden-spread/default-IV assumptions remain, and seeing all six sets
+still does not reveal the opponent's selected four. Open-sheet Pokemon are not
+marked as actually brought until observed in battle.
+
+Tests verify every sampled native state preserves sheet facts, conflicting or
+missing usage natures cannot overwrite the known nature, opponent MCTS root
+moves come from the sheet, and actual Champions `showteam` messages parse into
+the corresponding engine fields. The optional read-only reference check is:
+
+```sh
+SHOWDOWN_SIM=/absolute/path/to/showdown/dist/sim \
+  python -m pytest tests/test_open_team_sheets.py
+```
+
+This is a client/state-sampling change and requires no engine rebuild. The
+separately documented startup frame-boundary limitations are unchanged.

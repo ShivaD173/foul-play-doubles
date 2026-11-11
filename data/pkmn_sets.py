@@ -109,6 +109,8 @@ class PokemonSpread:
     count: int
 
     def spread_makes_sense(self, pkmn: Pokemon):
+        if pkmn.known_nature and self.nature != pkmn.known_nature:
+            return False
         if self.evs[3] > 50 or natures[self.nature]["plus"] == constants.SPECIAL_ATTACK:
             has_special_move = any(
                 all_move_json.get(mv.name, {}).get(constants.CATEGORY, "")
@@ -316,6 +318,9 @@ class _SmogonSets:
                 )
                 if self._pokemon_set_makes_sense(pkmn, pkmn_set):
                     self.pkmn_sets[pkmn_name].append(pkmn_set)
+            self.pkmn_sets[pkmn_name] = self._respect_known_nature(
+                pkmn, self.pkmn_sets[pkmn_name]
+            )
             self.pkmn_sets[pkmn_name].sort(key=lambda x: x.count, reverse=True)
             self.pkmn_speed_ranges[pkmn_name] = StatRange(min=0, max=float("inf"))
 
@@ -388,6 +393,20 @@ class _SmogonSets:
 
         self._initialize(self.raw_pkmn_sets, opponent)
 
+    @staticmethod
+    def _respect_known_nature(pkmn: Pokemon, spreads: list[PokemonSpread]):
+        if not pkmn.known_nature:
+            return spreads
+        matching = [spread for spread in spreads if spread.nature == pkmn.known_nature]
+        if matching:
+            return matching
+        # Missing/old usage data must not override a revealed nature. Reuse its
+        # EV hypotheses with the known nature; this does not reveal EVs or IVs.
+        return [
+            PokemonSpread(pkmn.known_nature, spread.evs, spread.count)
+            for spread in spreads
+        ]
+
     def get_random_spread(self, pkmn: Pokemon) -> Optional[PokemonSpread]:
         if not self.pkmn_sets:
             logger.warning("Called `predict_set` when pkmn_sets was empty")
@@ -395,6 +414,7 @@ class _SmogonSets:
         spreads = self.get_pokemon_from_sets(pkmn.name)
         if not spreads:
             return None
+        spreads = self._respect_known_nature(pkmn, spreads)
 
         tries = 0
         while tries < 20:

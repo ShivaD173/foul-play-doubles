@@ -149,12 +149,12 @@ def packed_to_dict(packed_string):
         ) = pkmn_string.split("|")
 
         this_pkmn["name"] = normalize_name(species) or normalize_name(nickname)
+        this_pkmn["nature"] = normalize_name(nature) or None
         this_pkmn["item"] = normalize_name(item)
         this_pkmn["ability"] = normalize_name(ability)
         this_pkmn["moves"] = [normalize_name(move) for move in moves.split(",") if move]
         this_pkmn["tera_type"] = normalize_name(rest.split(",")[-1])
-        this_pkmn["level"] = int(level)
-        assert this_pkmn["tera_type"]
+        this_pkmn["level"] = int(level) if level else 100
         ret.append(this_pkmn)
 
     return ret

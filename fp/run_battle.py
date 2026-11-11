@@ -197,7 +197,7 @@ async def start_standard_battle(
         line
         for line in msg.split("\n")
         if line.startswith(f"|showteam|{battle.opponent.name}")
-    ][0][13:]
+    ][0].split("|", 3)[3]
     battle.opponent.from_packed_string(opponent_showteam)
 
     await get_first_request_json(ps_websocket_client, battle)
