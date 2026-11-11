@@ -64,7 +64,14 @@ def format_decision(battle, slot, decision):
 
         message = "move {}".format(decision)
         if transformation == "mega":
-            message = "{} {}".format(message, constants.MEGA)
+            if slot.active.can_mega_evo:
+                message = "{} {}".format(message, constants.MEGA)
+            else:
+                logger.warning(
+                    "Omitting unavailable Mega Evolution from engine choice %s; "
+                    "the current Showdown request does not allow it.",
+                    decision_split,
+                )
         elif slot.active.can_ultra_burst:
             message = "{} {}".format(message, constants.ULTRA_BURST)
 

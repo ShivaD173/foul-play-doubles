@@ -59,3 +59,10 @@ def test_switch_indices_are_preserved():
         user=SimpleNamespace(reserve=[SimpleNamespace(name="arcanine", index=3)])
     )
     assert format_decision(battle, slot(), "switch arcanine") == "switch 3"
+
+
+def test_unavailable_mega_is_omitted_without_losing_the_target():
+    assert (
+        format_decision(SimpleNamespace(), slot(can_mega=False), "focusblast,2,a,mega")
+        == "move focusblast 1"
+    )

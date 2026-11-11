@@ -132,3 +132,26 @@ For an optional read-only check against a compiled Showdown reference:
 ```sh
 node tests/choice_reference.cjs /absolute/path/to/showdown/dist/sim
 ```
+
+## Resolved Mega resource serialization
+
+The client tracked protocol Mega Evolution events as `Pokemon.is_mega`, but the
+state adapter omitted the engine's `mega_evolved` constructor argument. Every
+serialized Pokemon therefore defaulted to `mega_evolved=False`, allowing MCTS
+to offer another Mega Evolution after a teammate had already used it.
+
+The adapter now exports the flag for both sides, including reserves and fainted
+Pokemon. The existing engine already scans the side's entire team for a used
+Mega; no engine/binding rebuild is required for this client fix. Compiled-engine
+regressions verify root actions after state serialization with the flag in
+either active slot, in reserve, and on a fainted reserve, independently for
+both sides. Protocol-event-to-engine serialization is tested as well.
+
+As a defensive boundary check, the formatter only sends a requested Mega flag
+when the latest Showdown request allows the active Pokemon to Mega Evolve.
+If not, it logs a warning and retains the searched move and target without the
+Mega flag. The primary fix is to model the spent resource correctly in search,
+not merely rely on emergency `/choose default` recovery.
+
+The custom log formatter now calls `LogRecord.getMessage()` so parameterized
+messages show actual request IDs and error details rather than literal `%s`.

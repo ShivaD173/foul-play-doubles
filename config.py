@@ -10,7 +10,7 @@ from typing import Optional
 class CustomFormatter(logging.Formatter):
     def format(self, record):
         lvl = "{}".format(record.levelname)
-        return "{} {}".format(lvl.ljust(8), record.msg)
+        return "{} {}".format(lvl.ljust(8), record.getMessage())
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):

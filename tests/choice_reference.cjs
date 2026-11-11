@@ -6,7 +6,7 @@ function battle() {
   const team = [
     {species: 'Arcanine', ability: 'Intimidate', moves: ['Head Smash']},
     {species: 'Ampharos', ability: 'Static', item: 'Ampharosite', moves: ['Zap Cannon']},
-    {species: 'Garchomp', ability: 'Rough Skin', moves: ['Dragon Claw']},
+    {species: 'Garchomp', ability: 'Rough Skin', item: 'Garchompite', moves: ['Dragon Claw']},
     {species: 'Snorlax', ability: 'Thick Fat', moves: ['Tackle']},
   ].map(p => ({...p, level: 50}));
   b.setPlayer('p1', {name: 'Bot', team});
@@ -26,3 +26,19 @@ assert.equal(fallback.choose('p1', 'move headsmash 1,move zapcannon mega'), fals
 assert.equal(fallback.choose('p1', 'default'), true);
 assert.ok(fallback.p1.isChoiceDone());
 console.log('Champions choice checks passed: missing target rejected, Mega target preserved, default recovery legal.');
+
+// Once one teammate has Mega Evolved, another holder's request must forbid it.
+const used = battle();
+for (const side of used.sides) {
+  for (const p of side.pokemon) p.hp = p.maxhp = p.baseMaxhp = 5000;
+}
+assert.equal(used.choose('p1', 'move headsmash 1,move zapcannon 1 mega'), true);
+assert.equal(used.choose('p2', 'default'), true);
+assert.equal(used.choose('p1', 'switch 3,move zapcannon 1'), true);
+assert.equal(used.choose('p2', 'default'), true);
+assert.equal(used.p1.active[0].species.id, 'garchomp');
+assert.ok(!used.p1.activeRequest.active[0].canMegaEvo);
+assert.equal(used.choose('p1', 'move dragonclaw 1 mega,move zapcannon 1'), false);
+assert.match(used.p1.choice.error, /can't mega evolve/);
+assert.equal(used.choose('p1', 'move dragonclaw 1,move zapcannon 1'), true);
+console.log('Champions Mega resource check passed: another stone holder cannot Mega after its teammate.');
