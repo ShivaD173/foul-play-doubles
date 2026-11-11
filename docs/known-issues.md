@@ -155,3 +155,29 @@ not merely rely on emergency `/choose default` recovery.
 
 The custom log formatter now calls `LogRecord.getMessage()` so parameterized
 messages show actual request IDs and error details rather than literal `%s`.
+
+## Resolved Champions HP-color parsing crash
+
+Champions' displayed HP can include a bar-color suffix on the denominator:
+`50/100y`, `50/100g`, `20/100r`, or `20/100y`, optionally followed by a status
+such as `brn`. These are valid Showdown protocol values. The shared HP parser
+previously passed `100y` directly to `int`, crashing damage inference during a
+spread move.
+
+The parser now separates the numeric HP/maximum HP, optional `g`/`y`/`r` hint,
+and status. It retains the existing fainted-condition semantics and rejects
+malformed numeric conditions instead of silently discarding parse errors.
+Tests cover Champions and legacy pixel-bar suffixes, all nonvolatile statuses,
+and spread damage inference with Make It Rain damaging Pawmot and Rillaboom.
+
+An optional contract test obtains 28 real condition strings from the read-only
+Champions simulator at the exact HP-color boundaries:
+
+```sh
+SHOWDOWN_SIM=/absolute/path/to/showdown/dist/sim \
+  python -m pytest tests/test_hp_conditions.py
+```
+
+This is a client parser fix; rebuilding the engine is unnecessary. The HP bar's
+color hint is accepted but is not used to refine the engine's estimated HP or
+damage-inference bounds.

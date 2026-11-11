@@ -1,4 +1,5 @@
 import math
+import re
 import constants
 from config import FoulPlayConfig
 
@@ -31,19 +32,27 @@ natures = {
 }
 
 
-def get_pokemon_info_from_condition(condition_string: str):
-    if constants.FNT in condition_string:
-        return 0, 0, None
+_HP_CONDITION = re.compile(r"([0-9]+)/([0-9]+)[gyr]?")
 
-    split_string = condition_string.split("/")
-    hp = int(split_string[0])
-    if any(s in condition_string for s in constants.NON_VOLATILE_STATUSES):
-        maxhp, status = split_string[1].split(" ")
-        maxhp = int(maxhp)
-        return hp, maxhp, status
-    else:
-        maxhp = int(split_string[1])
-        return hp, maxhp, None
+
+def get_pokemon_info_from_condition(condition_string: str):
+    """Parse exact HP or displayed HP with Showdown's optional bar-color hint.
+
+    Champions may send 50/100y, 50/100g, 20/100r, or 20/100y.
+    The suffix belongs to the displayed HP bar, not the numeric denominator.
+    """
+    parts = condition_string.split()
+    if constants.FNT in parts:
+        return 0, 0, None
+    match = _HP_CONDITION.fullmatch(parts[0]) if parts else None
+    if match is None or len(parts) > 2:
+        raise ValueError("Invalid Pokemon HP condition: {}".format(condition_string))
+    status = parts[1] if len(parts) == 2 else None
+    if status is not None and status not in constants.NON_VOLATILE_STATUSES:
+        raise ValueError(
+            "Invalid Pokemon status in condition: {}".format(condition_string)
+        )
+    return int(match.group(1)), int(match.group(2)), status
 
 
 def normalize_name(name):
