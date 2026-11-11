@@ -1,0 +1,96 @@
+# Remaining Champions issues and integration work
+
+Target: **[Gen 9 Champions] VGC 2026 Reg M-C**, ID
+`gen9championsvgc2026regmc`, Showdown mod `champions`.
+
+## Engine mechanics
+
+The canonical inventory is in the sibling engine repository:
+
+**[Remaining Champions issues](https://github.com/ShivaD173/poke-engine-doubles/blob/main/docs/remaining-issues.md)**
+
+It retains the original review IDs, reproduction/source-review distinctions,
+Champions availability corrections, lower-priority incomplete mechanics, and
+unchanged search approximations. It also identifies the selected fixes
+(2, 3, 7, 11, 19) and their related resolved findings. The read-only Showdown
+reference and test instructions are in the
+[engine audit](https://github.com/ShivaD173/poke-engine-doubles/blob/main/docs/champions-spread-audit.md).
+
+In particular, Make It Rain's **95% accuracy and -2 SpA drop are correct for
+Champions**. The earlier review used the wrong format for that finding.
+
+## Unfixed client issues
+
+These are source findings/integration limitations, not claims of completed
+end-to-end tests against a live Champions server.
+
+### Published engine dependency does not include the local fixes
+
+[requirements.txt](../requirements.txt) installs `poke-engine-doubles==0.0.7`
+from PyPI with the `terastallization` feature. Merely pushing changes to the
+engine fork does not change that package. Champions needs Mega Evolution
+support, and the patched engine must be installed explicitly. With both
+repositories checked out beside each other, activate this client's virtual
+environment and run from the client repository:
+
+```sh
+pip install --force-reinstall --no-cache-dir ../poke-engine-doubles/poke-engine-py \
+  --config-settings="build-args=--features poke-engine/mega --no-default-features"
+```
+
+Reinstalling the existing requirements afterward replaces this build. A durable
+deployment still needs a pinned engine commit/build or a released patched
+package and corresponding dependency changes.
+
+### Accuracy/evasion stages are discarded (original finding 20)
+
+[fp/search/poke_engine_helpers.py](../fp/search/poke_engine_helpers.py) serializes
+`accuracy_boost=0` and `evasion_boost=0`. The engine also has a separate target-
+evasion calculation issue. Both sides need attention for faithful predictions.
+
+### Startup assumes particular websocket frame boundaries
+
+[fp/run_battle.py](../fp/run_battle.py) consumes the initial room message, then
+waits separately for player/request messages. `get_first_request_json` tests the
+first pipe-delimited event instead of processing every event in a frame. A
+request bundled with initialization can be skipped. Startup also expects the
+opponent's `showteam` event in a particular preview frame and indexes it without
+handling absence. Preserve/process all events and retain requests/team sheets
+across frames when addressing this.
+
+### The client assumes a best-of-three room
+
+[run.py](../run.py) calls `_get_best_of_3_room_name` and uses a best-of-three
+loop. This is not a general single-game startup path. Confirm the intended
+challenge/server behavior before treating the non-Bo3 format as turnkey.
+
+### Preview parallelism can become zero
+
+[fp/search/main.py](../fp/search/main.py) computes preview parallelism as
+`FoulPlayConfig.parallelism // 2`. A value of 1 becomes zero, producing no
+preview samples and an invalid worker count. A minimum worker/sample count or
+configuration validation is still needed.
+
+### Engine reinstall Make target references a missing configuration file
+
+The `poke_engine` target in [Makefile](../Makefile) reads the package version
+from `pyproject.toml`, but that file is absent in this client checkout. The
+explicit sibling-source installation command above avoids that target; the
+target itself remains unfixed.
+
+## Search timing and benchmark limits
+
+- Battle search samples **four opponent states**. `--search-time-ms` is a budget
+  for each sampled state. With one process, four 10-second searches require
+  roughly 40 seconds plus overhead; multiple processes compete for CPU/memory.
+- The current client calls the engine without passing a thread count. Process
+  parallelism across samples and shared-tree engine threading are different.
+- Measured engine cleanup can extend a 10-second search-budget call to roughly
+  11–14 seconds on larger positions. This is not a hard turn-time guarantee.
+- Single-threaded and shared-tree searches have different depth limits (4 and
+  6 completed turns respectively), so raw iteration counts are not a pure
+  multithreading speedup comparison. The engine caps a tree at 25 million
+  iterations.
+
+No heuristic implementation from the earlier singles-repository experiment was
+copied into this doubles client. This client continues to use doubles MCTS.
