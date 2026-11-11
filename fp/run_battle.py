@@ -8,6 +8,7 @@ import constants
 from config import FoulPlayConfig, SaveReplay
 from data.pkmn_sets import SmogonSets
 from fp.battle import LastUsedMove, Pokemon, Battle, BattleData
+from fp.choice_recovery import ChoiceRecovery
 from fp.search.helpers import format_decision
 from fp.battle_modifier import async_update_battle
 from fp.helpers import normalize_name
@@ -236,6 +237,7 @@ async def pokemon_battle(
     battle = await start_battle(
         ps_websocket_client, pokemon_battle_type, first_battle, all_battle_data
     )
+    choice_recovery = ChoiceRecovery()
     while True:
         msg = await ps_websocket_client.receive_message()
         if battle_is_finished(battle.battle_tag, msg):
@@ -267,6 +269,8 @@ async def pokemon_battle(
             return winner, True, battle.battle_data
         else:
             action_required = await async_update_battle(battle, msg)
+            if await choice_recovery.recover(ps_websocket_client, battle, msg):
+                continue
             if action_required and not battle.wait:
                 best_move_a, best_move_b = await async_pick_move(battle)
                 best_move = [f"/choose {best_move_a},{best_move_b}", str(battle.rqid)]

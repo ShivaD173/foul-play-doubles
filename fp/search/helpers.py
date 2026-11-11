@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def format_decision(battle, slot, decision):
-    # Formats a decision for communication with Pokemon-Showdown
-    # If the pokemon can mega-evolve, it will
-    # If the move can be used as a Z-Move, it will be
+    # Preserve the MCTS-selected target and transformation in Showdown syntax.
 
     if decision.startswith(constants.SWITCH_STRING + " "):
         switch_pokemon = decision.split("switch ")[-1]
@@ -22,12 +20,12 @@ def format_decision(battle, slot, decision):
     elif decision.lower().startswith("no move"):
         return "pass"
     else:
-        tera = False
-        if decision.endswith(",tera"):
-            decision = decision.removesuffix(",tera")
-            tera = True
-
         decision_split = decision.split(",")
+        transformation = None
+        if decision_split[-1] in {"tera", "mega"}:
+            transformation = decision_split.pop()
+        if len(decision_split) not in {1, 3}:
+            raise ValueError("Malformed engine move choice: {}".format(decision))
         decision = decision_split[0]
         if len(decision_split) == 3:
             if decision_split[2] == "a":
@@ -65,7 +63,7 @@ def format_decision(battle, slot, decision):
             decision = "recharge 1"
 
         message = "move {}".format(decision)
-        if slot.active.can_mega_evo:
+        if transformation == "mega":
             message = "{} {}".format(message, constants.MEGA)
         elif slot.active.can_ultra_burst:
             message = "{} {}".format(message, constants.ULTRA_BURST)
@@ -74,7 +72,7 @@ def format_decision(battle, slot, decision):
         # if slot.active.can_dynamax and all(p.hp == 0 for p in battle.user.reserve):
         #     message = "{} {}".format(message, constants.DYNAMAX)
 
-        if tera:
+        if transformation == "tera":
             message = "{} {}".format(message, constants.TERASTALLIZE)
 
         # if slot.active.get_move(decision).can_z:

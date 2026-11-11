@@ -101,3 +101,34 @@ orders are not duplicated. Filters remain serializable for process workers.
 Preview parallelism is also clamped to at least one sample/worker, so a configured
 `--search-parallelism 1` no longer produces a zero-worker preview search. This
 does not alter the four-state sampling policy for battle decisions.
+
+## Resolved Mega choice formatting and rejected-choice handling
+
+The client previously removed `,tera` before parsing targets but did not remove
+`,mega`. An engine decision such as `zapcannon,2,a,mega` therefore bypassed the
+three-field target parser and became `move zapcannon mega`, which Showdown
+rejects in doubles. Mega eligibility also caused the client to add `mega` to
+plain move choices even when MCTS had not selected the transformation.
+
+The formatter now parses the explicit transformation first, preserves the
+signed target, and honors MCTS's Mega decision. The reported joint action is
+sent as `/choose move headsmash 1,move zapcannon 1 mega`.
+
+During the battle loop, an `[Invalid choice]` or `[Unavailable choice]` error
+from the current room now triggers one `/choose default` response for the
+current request. Showdown supplies a legal complete action, including required
+targets and switches. This emergency action can differ from the searched policy;
+normal turns continue to use MCTS. The rejected move is cleared from selected-
+move inference. If automatic recovery is also rejected for the same request,
+the client raises an explicit error instead of repeatedly retrying or silently
+waiting for a timeout. This recovery does not redesign startup/preview handling.
+
+`tests/test_format_decision.py` includes the exact reported action and checks
+both ally/foe targets, spread/self moves, explicit Mega/Tera choices, and plain
+moves with Mega eligibility. `tests/test_choice_recovery.py` exercises bounded
+recovery and the battle loop without requiring a new request after rejection.
+For an optional read-only check against a compiled Showdown reference:
+
+```sh
+node tests/choice_reference.cjs /absolute/path/to/showdown/dist/sim
+```
