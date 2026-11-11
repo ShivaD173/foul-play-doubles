@@ -185,6 +185,7 @@ async def start_standard_battle(
     pokemon_battle_type,
     first_battle,
     all_battle_data,
+    team_dict=None,
 ):
     battle, msg = await start_battle_common(ps_websocket_client, pokemon_battle_type)
     battle.battle_type = constants.STANDARD_BATTLE
@@ -201,6 +202,18 @@ async def start_standard_battle(
     battle.opponent.from_packed_string(opponent_showteam)
 
     await get_first_request_json(ps_websocket_client, battle)
+    battle.user.apply_own_team_data(team_dict)
+    # The server's own sheet confirms the nature without replacing live stats.
+    own_sheets = [
+        line
+        for line in msg.split("\n")
+        if line.startswith(f"|showteam|{battle.user.name}|")
+    ]
+    if own_sheets:
+        from teams.team_converter import packed_to_dict
+
+        own_sheet = packed_to_dict(own_sheets[-1].split("|", 3)[3])
+        battle.user.apply_own_team_data(own_sheet)
     battle.during_team_preview()
 
     if first_battle:
@@ -216,10 +229,18 @@ async def start_standard_battle(
 
 
 async def start_battle(
-    ps_websocket_client, pokemon_battle_type, first_battle, all_battle_data
+    ps_websocket_client,
+    pokemon_battle_type,
+    first_battle,
+    all_battle_data,
+    team_dict=None,
 ):
     battle = await start_standard_battle(
-        ps_websocket_client, pokemon_battle_type, first_battle, all_battle_data
+        ps_websocket_client,
+        pokemon_battle_type,
+        first_battle,
+        all_battle_data,
+        team_dict=team_dict,
     )
 
     await ps_websocket_client.send_message(battle.battle_tag, ["/timer on"])
@@ -233,9 +254,14 @@ async def pokemon_battle(
     best_of_3_room_name,
     first_battle,
     all_battle_data: list[BattleData],
+    team_dict=None,
 ):
     battle = await start_battle(
-        ps_websocket_client, pokemon_battle_type, first_battle, all_battle_data
+        ps_websocket_client,
+        pokemon_battle_type,
+        first_battle,
+        all_battle_data,
+        team_dict=team_dict,
     )
     choice_recovery = ChoiceRecovery()
     while True:

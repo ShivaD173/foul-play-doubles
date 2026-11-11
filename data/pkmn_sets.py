@@ -169,10 +169,29 @@ class _SmogonSets:
         self.pkmn_speed_ranges = {}
         self.pkmn_mode = "uninitialized"
 
-    def _pokemon_is_similar(self, normalized_name, list_of_pkmn_names):
-        return any(normalized_name.startswith(n) for n in list_of_pkmn_names) or any(
-            n.startswith(normalized_name) for n in list_of_pkmn_names
-        )
+    @staticmethod
+    def _lookup_names_for_pokemon(pkmn: Pokemon):
+        name = normalize_name(pkmn.name)
+        info = pokedex[name]
+        base = normalize_name(info.get("baseSpecies", name))
+        names = {name, base}
+        # A known regional/alternate forme cannot choose another forme's Mega.
+        if name != base:
+            return names
+        for forme in pokedex[base].get("otherFormes", []):
+            forme = normalize_name(forme)
+            data = pokedex.get(forme, {})
+            if not data.get("forme", "").lower().startswith("mega"):
+                continue
+            required_item = normalize_name(data.get("requiredItem", ""))
+            required_move = normalize_name(data.get("requiredMove", ""))
+            matching_item = bool(required_item) and required_item == pkmn.item
+            matching_move = (
+                bool(required_move) and pkmn.get_move(required_move) is not None
+            )
+            if pkmn.item == constants.UNKNOWN_ITEM or matching_item or matching_move:
+                names.add(forme)
+        return names
 
     def _get_smogon_stats_json(self, smogon_stats_url):
         cache_file_name = ntpath.basename(smogon_stats_url)
@@ -214,15 +233,13 @@ class _SmogonSets:
                 ] = teammate_count
 
             # if `pkmn_names` is provided, only find data on pkmn in that list
-            if (
-                pkmn_names
-                and normalized_name not in pkmn_names
-                and not self._pokemon_is_similar(normalized_name, pkmn_names)
-            ):
+            if pkmn_names and normalized_name not in pkmn_names:
                 continue
             else:
                 logger.debug(
-                    "Adding {} to sets lookup for this battle".format(normalized_name)
+                    "Caching usage spreads for {} (lookup only; not a selected battle forme)".format(
+                        normalized_name
+                    )
                 )
 
             spreads = []
@@ -264,10 +281,14 @@ class _SmogonSets:
         for k in list(final_infos.keys()):
             v = final_infos[k]
             for other_forme in pokedex[k].get("otherFormes", []):
-                if normalize_name(other_forme) not in final_infos:
+                if normalize_name(other_forme) not in final_infos and (
+                    not pkmn_names or normalize_name(other_forme) in pkmn_names
+                ):
                     final_infos[normalize_name(other_forme)] = v
             for other_forme in pokedex[k].get("cosmeticFormes", []):
-                if normalize_name(other_forme) not in final_infos:
+                if normalize_name(other_forme) not in final_infos and (
+                    not pkmn_names or normalize_name(other_forme) in pkmn_names
+                ):
                     final_infos[normalize_name(other_forme)] = v
 
         return final_infos
@@ -371,15 +392,20 @@ class _SmogonSets:
 
     def initialize(self, pkmn_mode: str, battle: Battle):
         opponent = battle.opponent
-        pkmn_names = set(
-            p.name
-            for p in battle.opponent.reserve
+        pkmn_names = set()
+        for p in (
+            battle.opponent.reserve
             + battle.user.reserve
             + [battle.user.slot_a.active, battle.user.slot_b.active]
-        )
+        ):
+            if p is not None:
+                pkmn_names.update(self._lookup_names_for_pokemon(p))
         self.pkmn_mode = pkmn_mode
         smogon_stats_url = self._get_smogon_stats_file_name(pkmn_mode)
-        if self.current_pkmn_sets_url != smogon_stats_url:
+        if (
+            self.current_pkmn_sets_url != smogon_stats_url
+            or getattr(self, "lookup_names", None) != pkmn_names
+        ):
             self.raw_pkmn_sets = self._get_pokemon_information(
                 smogon_stats_url, pkmn_names
             )
@@ -391,6 +417,7 @@ class _SmogonSets:
                     smogon_stats_url, pkmn_names
                 )
 
+        self.lookup_names = pkmn_names
         self._initialize(self.raw_pkmn_sets, opponent)
 
     @staticmethod

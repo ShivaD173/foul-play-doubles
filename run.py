@@ -102,6 +102,7 @@ async def run_foul_play():
                 best_of_3_room_name,
                 first_battle,
                 all_battle_data,
+                team_dict=team_dict,
             )
             first_battle = False
             if winner == FoulPlayConfig.username:

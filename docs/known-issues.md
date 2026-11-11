@@ -217,3 +217,46 @@ SHOWDOWN_SIM=/absolute/path/to/showdown/dist/sim \
 
 This is a client/state-sampling change and requires no engine rebuild. The
 separately documented startup frame-boundary limitations are unchanged.
+
+## Own-team build knowledge and item-compatible Mega lookups
+
+The original launcher loaded the team's full export but did not pass that
+metadata into the battle model. Own moves, held items, abilities, HP, and
+current stats already came from Showdown's authoritative request. However,
+known nature and stat investment were missing when the engine recalculated
+stats for a future Mega Evolution.
+
+The launcher now forwards its loaded team data into each game, including each
+game of a best-of-three. The client matches entries by species/base species
+rather than nicknames or preview ordering, retains nature and stat investment,
+and accepts nature confirmation from its own open sheet. It does not overwrite
+live HP/stats, moves/PP, items, or abilities with stale export data. Champions'
+fixed-IV calculations remain in the engine; this does not add general-purpose
+IV support to the Rust interface.
+
+Usage data previously loaded species by prefix, so a base Raichu also cached
+Raichu-Mega-X and Raichu-Mega-Y. That was a lookup pool, not a chosen own Mega
+form, but it was unnecessarily broad. Lookup names and alias expansion now
+respect the known Mega stone (or applicable required move). Raichunite Y only
+adds Mega-Y for that Raichu. A known itemless Raichu adds neither; an unknown
+item can still allow both. Cached lookup names refresh when the known stone
+changes even if the stats URL is unchanged.
+
+If the bot has Raichunite Y and the opponent has Raichunite X, both names can
+legitimately appear in the shared lookup. Each battle Pokemon and the engine's
+Mega transition still use that Pokemon's current item. Cache logs now say
+explicitly that the entry is a lookup, not a selected battle form.
+
+Native-engine regressions check that Raichunite Y produces Mega-Y/No Guard and
+Raichunite X produces Mega-X/Electric Surge. A read-only Champions reference
+also verifies that known Timid nature with 32 Special Attack and 32 Speed
+points produces the same own Mega-Y stats as Showdown. Tests cover startup
+metadata application, nicknames, server-request authority, forbidden alias
+exclusion, and cache refresh when switching stones.
+
+```sh
+SHOWDOWN_SIM=/absolute/path/to/showdown/dist/sim \
+  python -m pytest tests/test_own_team_knowledge.py
+```
+
+These are client changes; no engine rebuild is required.

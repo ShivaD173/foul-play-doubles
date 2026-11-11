@@ -351,6 +351,54 @@ class Battler:
                 p.add_move(mv)
             self.reserve.append(p)
 
+    def apply_own_team_data(self, team_data):
+        """Retain known build metadata without overwriting live request facts.
+
+        The request owns current stats/HP, moves/PP, item and ability. Nature
+        and stat investment are needed separately for simulated Mega stats.
+        """
+        if not team_data:
+            return
+
+        def base_species(name):
+            name = normalize_name(name)
+            info = pokedex.get(name, {})
+            return normalize_name(
+                info.get("baseSpecies", info.get("changesFrom", name))
+            )
+
+        for p in [self.slot_a.active, self.slot_b.active] + self.reserve:
+            if p is None:
+                continue
+            matches = [
+                entry
+                for entry in team_data
+                if base_species(entry.get("species") or entry["name"])
+                == base_species(p.name)
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    "Cannot match own Pokemon {} to a unique team export entry".format(
+                        p.name
+                    )
+                )
+            entry = matches[0]
+            if entry.get("nature") is not None:
+                p.known_nature = normalize_name(entry["nature"]) or "serious"
+                p.nature = p.known_nature
+            if "evs" in entry:
+                p.evs = tuple(
+                    int(entry["evs"].get(stat) or 0)
+                    for stat in ("hp", "atk", "def", "spa", "spd", "spe")
+                )
+            logger.info(
+                "Own team metadata for %s: nature=%s, spread=%s, current item=%s",
+                p.name,
+                p.nature,
+                p.evs,
+                p.item,
+            )
+
     def get_slot(self, slot_name: str):
         if slot_name == "a":
             return self.slot_a
