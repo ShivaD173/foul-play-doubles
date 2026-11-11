@@ -64,13 +64,6 @@ across frames when addressing this.
 loop. This is not a general single-game startup path. Confirm the intended
 challenge/server behavior before treating the non-Bo3 format as turnkey.
 
-### Preview parallelism can become zero
-
-[fp/search/main.py](../fp/search/main.py) computes preview parallelism as
-`FoulPlayConfig.parallelism // 2`. A value of 1 becomes zero, producing no
-preview samples and an invalid worker count. A minimum worker/sample count or
-configuration validation is still needed.
-
 ### Engine reinstall Make target references a missing configuration file
 
 The `poke_engine` target in [Makefile](../Makefile) reads the package version
@@ -94,3 +87,17 @@ target itself remains unfixed.
 
 No heuristic implementation from the earlier singles-repository experiment was
 copied into this doubles client. This client continues to use doubles MCTS.
+
+## Resolved preview API incompatibility
+
+The engine exposes `TeamPreviewFilters(side_one=[...], side_two=[...])` with
+zero-based four-Pokemon index options. It does **not** export
+`TeamPreviewFilterSide`. The client previously imported an obsolete engine API
+and failed at startup with that ImportError. It now keeps its named constraints
+in `fp/search/team_preview.py` and converts them to the engine's indexed API.
+Historical unordered lead pairs allow both slot orders, while equivalent backup
+orders are not duplicated. Filters remain serializable for process workers.
+
+Preview parallelism is also clamped to at least one sample/worker, so a configured
+`--search-parallelism 1` no longer produces a zero-worker preview search. This
+does not alter the four-state sampling policy for battle decisions.

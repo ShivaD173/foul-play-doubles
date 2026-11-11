@@ -3,7 +3,8 @@ import random
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 
-from poke_engine.poke_engine import TeamPreviewFilters, TeamPreviewFilterSide
+from poke_engine import TeamPreviewFilters
+from fp.search.team_preview import TeamPreviewFilterSide, team_preview_options
 
 import constants
 from data.pkmn_sets import SmogonSets
@@ -159,20 +160,25 @@ def get_teampreview_filters(
 ) -> list[TeamPreviewFilters]:
     previous_battle_data = battle.previous_battle_data
 
+    our_options = team_preview_options(
+        [pkmn.name for pkmn in battle.user.reserve], our_side_filters
+    )
+    opponent_names = [pkmn.name for pkmn in battle.opponent.reserve]
+
     result = []
     for pbd in previous_battle_data:
         side_two_filter = opponent_team_preview_side_filter(battle, pbd)
         result.append(
             TeamPreviewFilters(
-                side_one=our_side_filters,
-                side_two=side_two_filter,
+                side_one=our_options,
+                side_two=team_preview_options(opponent_names, side_two_filter),
             )
         )
         if not pbd.win:
             result.append(
                 TeamPreviewFilters(
-                    side_one=our_side_filters,
-                    side_two=side_two_filter,
+                    side_one=our_options,
+                    side_two=team_preview_options(opponent_names, side_two_filter),
                 )
             )
 
@@ -180,10 +186,9 @@ def get_teampreview_filters(
     while len(result) < parallelism:
         result.append(
             TeamPreviewFilters(
-                side_one=our_side_filters,
-                side_two=TeamPreviewFilterSide(
-                    leads=None,
-                    valid_pokemon=[pkmn.name for pkmn in battle.opponent.reserve],
+                side_one=our_options,
+                side_two=team_preview_options(
+                    opponent_names, TeamPreviewFilterSide(valid_pokemon=opponent_names)
                 ),
             )
         )
@@ -195,10 +200,10 @@ def get_result_from_teampreview_mcts(
     state: str, search_time_ms: int, index: int, team_preview_filter: TeamPreviewFilters
 ) -> MctsResult:
     logger.info(
-        f"Side Two Forced Leads ({index=}): {team_preview_filter.side_two.leads}"
-    )
-    logger.info(
-        f"Side Two Valid Pkmn ({index=}): {team_preview_filter.side_two.valid_pokemon}"
+        "Preview options (%s): side one=%s, side two=%s",
+        index,
+        len(team_preview_filter.side_one),
+        len(team_preview_filter.side_two),
     )
     logger.debug("Calling with {} state: {}".format(index, state))
     poke_engine_state = PokeEngineState.from_string(state)
@@ -244,7 +249,7 @@ def find_best_move(battle):
 
 
 def find_best_move_teampreview(battle):
-    parallelism = FoulPlayConfig.parallelism // 2
+    parallelism = max(1, FoulPlayConfig.parallelism // 2)
     search_time_per_battle = min(40_000, FoulPlayConfig.search_time_ms * 2)
 
     battles = get_battles_for_team_preview(battle, parallelism)
