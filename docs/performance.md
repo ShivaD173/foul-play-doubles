@@ -22,6 +22,14 @@ entry point shuts down the pool on exit; library callers can use
 configured worker count replaces the pool. The first call still pays process
 startup costs.
 
+The engine now uses mimalloc for Rust allocations in its Python extension and
+CLI. In the Linux benchmarks, median iterations completed within ten seconds
+increased from 1.100 million to 1.359 million in the opening fixture (+23.5%),
+and from 325,000 to 382,000 in the chance-heavy fixture (+17.5%). Larger trees
+also increased measured peak memory by about 19%. Fixed-seed comparisons
+preserved the exact policy scores and visit counts. These are synthetic,
+single-thread measurements; local hardware and positions can differ.
+
 The engine also caches chance distributions and makes full-tree diagnostic
 printing opt-in. See the engine's
 [benchmark and results](https://github.com/ShivaD173/poke-engine-doubles/blob/main/docs/performance.md).
@@ -33,6 +41,9 @@ make poke_engine_local GEN=mega
 ```
 
 ## Worker dispatch measurement
+
+These dispatch measurements predate the allocator change and measure a separate
+source of overhead; they are not used for the iteration-throughput figures above.
 
 On Linux/Python 3.12 with a two-CPU quota, four 50 ms native searches on two
 spawned workers took a median **266 ms** with fresh workers versus **120 ms**
