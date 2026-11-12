@@ -1,10 +1,10 @@
 import logging
 import random
-from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 
 from poke_engine import TeamPreviewFilters
 from fp.search.team_preview import TeamPreviewFilterSide, team_preview_options
+from fp.search.executor import get_search_executor
 
 import constants
 from data.pkmn_sets import SmogonSets
@@ -46,7 +46,6 @@ def sample_pkmn_to_remove(pkmn_list: list[Pokemon]):
 
 
 def sample_unrevealed_pkmn(battle: Battle, num_teams: int) -> list[(Battle, float)]:
-    battle = deepcopy(battle)
     num_reserves = NUM_RESERVES
 
     battles = []
@@ -136,11 +135,8 @@ def select_move_from_mcts_results(mcts_results: list[(MctsResult, float, int)]) 
 
 
 def get_result_from_mcts(state: str, search_time_ms: int, index: int) -> MctsResult:
-    logger.debug("Calling with {} state: {}".format(index, state))
     poke_engine_state = PokeEngineState.from_string(state)
-    res = monte_carlo_tree_search(poke_engine_state, search_time_ms)
-    logger.info("Iterations {}: {}".format(index, res.total_visits))
-    return res
+    return monte_carlo_tree_search(poke_engine_state, search_time_ms)
 
 
 def opponent_team_preview_side_filter(
@@ -201,21 +197,23 @@ def get_teampreview_filters(
 def get_result_from_teampreview_mcts(
     state: str, search_time_ms: int, index: int, team_preview_filter: TeamPreviewFilters
 ) -> MctsResult:
-    logger.info(
-        "Preview options (%s): side one=%s, side two=%s",
-        index,
-        len(team_preview_filter.side_one),
-        len(team_preview_filter.side_two),
-    )
-    logger.debug("Calling with {} state: {}".format(index, state))
     poke_engine_state = PokeEngineState.from_string(state)
-    res = monte_carlo_tree_search_team_preview(
+    return monte_carlo_tree_search_team_preview(
         poke_engine_state,
         team_preview_filter,
         search_time_ms,
     )
-    logger.info("Iterations {}: {}".format(index, res.total_visits))
-    return res
+
+
+def collect_mcts_results(futures):
+    # Spawned workers do not inherit the bot's logging handlers. Log in the
+    # parent so output continues to follow the current battle's log file.
+    results = []
+    for future, chance, index in futures:
+        result = future.result()
+        logger.info("Iterations %s: %s", index, result.total_visits)
+        results.append((result, chance, index))
+    return results
 
 
 def find_best_move(battle):
@@ -231,18 +229,17 @@ def find_best_move(battle):
         "Sampling {} battles at {}ms each".format(num_battles, search_time_per_battle)
     )
 
-    with ProcessPoolExecutor(max_workers=parallelism) as executor:
-        futures = []
-        for index, (b, chance) in enumerate(battles):
-            fut = executor.submit(
-                get_result_from_mcts,
-                battle_to_poke_engine_state(b).to_string(),
-                search_time_per_battle,
-                index,
-            )
-            futures.append((fut, chance, index))
+    executor = get_search_executor(parallelism)
+    futures = []
+    for index, (b, chance) in enumerate(battles):
+        state = battle_to_poke_engine_state(b).to_string()
+        logger.debug("Calling with %s state: %s", index, state)
+        fut = executor.submit(
+            get_result_from_mcts, state, search_time_per_battle, index
+        )
+        futures.append((fut, chance, index))
 
-    mcts_results = [(fut.result(), chance, index) for (fut, chance, index) in futures]
+    mcts_results = collect_mcts_results(futures)
 
     choice = select_move_from_mcts_results(mcts_results)
     logger.info("Choice: {}".format(choice))
@@ -267,21 +264,31 @@ def find_best_move_teampreview(battle):
         "Sampling {} battles at {}ms each".format(num_battles, search_time_per_battle)
     )
 
-    with ProcessPoolExecutor(max_workers=parallelism) as executor:
-        futures = []
-        for index, ((b, chance), tp_filter) in enumerate(
-            zip(battles, team_preview_filters)
-        ):
-            fut = executor.submit(
-                get_result_from_teampreview_mcts,
-                battle_to_poke_engine_state(b).to_string(),
-                search_time_per_battle,
-                index,
-                tp_filter,
-            )
-            futures.append((fut, chance, index))
+    # Preview submits fewer jobs; it can share the battle workers without
+    # creating a second pool that remains idle during the rest of the game.
+    executor = get_search_executor(FoulPlayConfig.parallelism)
+    futures = []
+    for index, ((b, chance), tp_filter) in enumerate(
+        zip(battles, team_preview_filters)
+    ):
+        logger.info(
+            "Preview options (%s): side one=%s, side two=%s",
+            index,
+            len(tp_filter.side_one),
+            len(tp_filter.side_two),
+        )
+        state = battle_to_poke_engine_state(b).to_string()
+        logger.debug("Calling with %s state: %s", index, state)
+        fut = executor.submit(
+            get_result_from_teampreview_mcts,
+            state,
+            search_time_per_battle,
+            index,
+            tp_filter,
+        )
+        futures.append((fut, chance, index))
 
-    mcts_results = [(fut.result(), chance, index) for (fut, chance, index) in futures]
+    mcts_results = collect_mcts_results(futures)
 
     choice = select_move_from_mcts_results(mcts_results)
     logger.info("Choice: {}".format(choice))

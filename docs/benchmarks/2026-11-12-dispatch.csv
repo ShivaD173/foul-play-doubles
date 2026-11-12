@@ -1,0 +1,17 @@
+native_engine,mode,trial,seconds,visits
+before,fresh,0,0.308424,50000
+before,fresh,1,0.266133,51000
+before,fresh,2,0.265689,51000
+before,fresh,3,0.282552,48000
+before,reused,0,0.230242,53000
+before,reused,1,0.119882,53000
+before,reused,2,0.120002,51000
+before,reused,3,0.121434,53000
+optimized,fresh,0,0.285987,50000
+optimized,fresh,1,0.285027,50000
+optimized,fresh,2,0.271578,51000
+optimized,fresh,3,0.258230,51000
+optimized,reused,0,0.230060,53000
+optimized,reused,1,0.114350,49000
+optimized,reused,2,0.113940,53000
+optimized,reused,3,0.119964,55000

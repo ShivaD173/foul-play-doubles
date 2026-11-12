@@ -1,6 +1,5 @@
 import json
 import asyncio
-import concurrent.futures
 from copy import deepcopy
 import logging
 
@@ -49,10 +48,9 @@ async def async_pick_move_teampreview(battle):
         battle_copy.user.update_from_request_json(battle_copy.request_json)
 
     loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        choice_a, choice_b = await loop.run_in_executor(
-            pool, find_best_move_teampreview, battle_copy
-        )
+    choice_a, choice_b = await loop.run_in_executor(
+        None, find_best_move_teampreview, battle_copy
+    )
     switch_a, faint_1 = choice_a.split(",")
     switch_b, faint_2 = choice_b.split(",")
     logger.info(f"Leads: {switch_a}, {switch_b}")
@@ -67,10 +65,7 @@ async def async_pick_move(battle):
         battle_copy.user.update_from_request_json(battle_copy.request_json)
 
     loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        choice_a, choice_b = await loop.run_in_executor(
-            pool, find_best_move, battle_copy
-        )
+    choice_a, choice_b = await loop.run_in_executor(None, find_best_move, battle_copy)
     battle.user.slot_a.last_selected_move = LastUsedMove(
         battle.user.slot_a.active.name,
         choice_a.split(",")[0],

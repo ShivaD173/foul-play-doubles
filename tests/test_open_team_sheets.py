@@ -146,12 +146,15 @@ def test_preview_and_battle_mcts_states_preserve_all_sheet_facts(monkeypatch):
             check_native_pokemon(native, i)
     live = previews[0][0]
     live.team_preview = False
+    original_state = battle_to_poke_engine_state(live).to_string()
     for sampled, chance in sample_unrevealed_pkmn(live, 4):
         assert chance == 0.25
         state = battle_to_poke_engine_state(sampled)
         for native in state.side_two.pokemon[:4]:
             check_native_pokemon(native, NAMES.index(native.id))
         assert len(sampled.opponent.reserve) == 2
+    assert battle_to_poke_engine_state(live).to_string() == original_state
+    assert len(live.opponent.reserve) == 4
     assert [p.nature for p in b.opponent.reserve] == NATURES
 
 

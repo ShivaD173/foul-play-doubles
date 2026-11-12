@@ -7,6 +7,7 @@ from config import FoulPlayConfig, init_logging, BotModes
 
 from teams import load_team, TeamListIterator
 from fp.run_battle import pokemon_battle
+from fp.search.executor import shutdown_search_executor
 from fp.websocket_client import PSWebsocketClient
 
 from data import all_move_json
@@ -157,3 +158,5 @@ if __name__ == "__main__":
     except Exception:
         logger.error(traceback.format_exc())
         raise
+    finally:
+        shutdown_search_executor()

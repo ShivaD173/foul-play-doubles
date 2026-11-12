@@ -80,6 +80,8 @@ target itself remains unfixed.
   parallelism across samples and shared-tree engine threading are different.
 - Measured engine cleanup can extend a 10-second search-budget call to roughly
   11–14 seconds on larger positions. This is not a hard turn-time guarantee.
+  Those measurements preceded the diagnostics and sampler optimizations;
+  [current performance results](performance.md) link the repeated comparison.
 - Single-threaded and shared-tree searches have different depth limits (4 and
   6 completed turns respectively), so raw iteration counts are not a pure
   multithreading speedup comparison. The engine caps a tree at 25 million
