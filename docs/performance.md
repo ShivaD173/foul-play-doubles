@@ -2,6 +2,12 @@
 
 Target: `[Gen 9 Champions] VGC 2026 Reg M-C` (`champions`).
 
+The updated engine corrects action credit, replaces 50 initial visits per
+action with one independently sampled visit, and raises single-threaded depth
+to six completed turns. Rebuild the native extension to receive these changes;
+see [search policy](https://github.com/ShivaD173/poke-engine-doubles/blob/main/docs/search-policy.md).
+The allocator and dispatch measurements below predate this search-policy update.
+
 ## Changes
 
 - Search processes stay alive between team preview, turns, and games. Both
