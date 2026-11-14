@@ -214,3 +214,37 @@ def test_real_champions_open_sheet_matches_native_mcts_state(monkeypatch):
         assert [m.id for m in native.moves] == [
             normalize_name(m) for m in expected["moves"]
         ]
+
+
+@pytest.mark.parametrize(
+    "mode, expected_spreads",
+    [("gen9championsvgc2026regmcbo3", 2), ("gen9vgc2023regc", 1)],
+)
+def test_usage_spread_merging_respects_format_scale(
+    monkeypatch, mode, expected_spreads
+):
+    sets = _SmogonSets()
+    sets.pkmn_mode = mode
+    raw = {
+        "Froslass-Mega": {
+            "Raw count": 100,
+            "Teammates": {},
+            "Checks and Counters": {},
+            "Spreads": {
+                "Timid:2/0/0/32/0/32": 60,
+                "Timid:8/0/0/26/0/32": 25,  # exactly six: merge
+                "Timid:9/0/0/25/0/32": 15,  # seven: retain in Champions
+            },
+        }
+    }
+    monkeypatch.setattr(sets, "_get_smogon_stats_json", lambda url: raw)
+    spreads = sets._get_pokemon_information("unused", {"froslassmega"})["froslassmega"][
+        "spreads"
+    ]
+    assert len(spreads) == expected_spreads
+    assert spreads[0][0:2] == ["timid", "2,0,0,32,0,32"]
+    if expected_spreads == 2:
+        assert spreads[0][2] == pytest.approx(0.85)
+        assert spreads[1] == ["timid", "9,0,0,25,0,32", 0.15]
+    else:
+        assert spreads[0][2] == pytest.approx(1.0)

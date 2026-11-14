@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 PWD = os.path.dirname(os.path.abspath(__file__))
 
 
-def spreads_are_alike(s1, s2):
+def spreads_are_alike(s1, s2, threshold=48):
     if s1[0] != s2[0]:
         return False
 
@@ -48,8 +48,7 @@ def spreads_are_alike(s1, s2):
 
     diff = [abs(i - j) for i, j in zip(s1, s2)]
 
-    # 24 is arbitrarily chosen as the threshold for EVs to be "alike"
-    return all(v <= 48 for v in diff)
+    return all(v <= threshold for v in diff)
 
 
 def get_default_sets():
@@ -218,6 +217,8 @@ class _SmogonSets:
         infos = self._get_smogon_stats_json(smogon_stats_url)
         self.all_pkmn_counts.clear()
 
+        # Champions investments use a smaller scale than standard EVs.
+        spread_threshold = 6 if "champions" in self.pkmn_mode else 48
         final_infos = {}
         final_effectiveness = {}
         for pkmn_name, pkmn_information in infos.items():
@@ -265,7 +266,9 @@ class _SmogonSets:
                     nature, evs = [normalize_name(i) for i in spread.split(":")]
                     evs = evs.replace("/", ",")
                     for sp in spreads:
-                        if spreads_are_alike(sp, (nature, evs)):
+                        if spreads_are_alike(
+                            sp, (nature, evs), threshold=spread_threshold
+                        ):
                             sp[2] += percentage
                             break
                     else:
