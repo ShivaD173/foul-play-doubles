@@ -70,6 +70,7 @@ def test_sheet_records_public_information_without_claiming_brought_pokemon():
         assert p.name == NAMES[i]
         assert p.nature == p.known_nature == NATURES[i]
         assert p.item == ITEMS[i]
+        assert p.item_known
         assert p.ability == ABILITY[i]
         assert [m.name for m in p.moves] == MOVES[i]
         assert not p.revealed  # Six visible sets do not reveal which four were brought.

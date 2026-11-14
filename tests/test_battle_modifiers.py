@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import json
 
 import constants
@@ -29,6 +30,7 @@ from fp.battle_modifier import clearallboost
 from fp.battle_modifier import heal_or_damage
 from fp.battle_modifier import swapsideconditions
 from fp.battle_modifier import move
+from fp.battle_modifier import set_item
 from fp.battle_modifier import cant
 from fp.battle_modifier import boost
 from fp.battle_modifier import setboost
@@ -1482,16 +1484,67 @@ class TestMove(unittest.TestCase):
 
         self.assertTrue(self.battle.opponent.slot_a.active.can_have_choice_item)
 
-    def test_sets_can_have_choice_item_to_false_even_if_item_is_known(self):
-        # if the item is known - this flag doesn't matter anyways
-        self.battle.opponent.slot_a.active.can_have_choice_item = True
-        self.battle.opponent.slot_a.active.item = "leftovers"
-        split_msg = ["", "move", "p2a: Caterpie", "String Shot"]
-        self.battle.opponent.last_used_move = LastUsedMove("caterpie", "tackle", 0)
+    def test_known_items_skip_inference_but_still_track_moves_and_confusion(self):
+        for item in ("froslassite", "choiceband", "assaultvest", "", None):
+            with self.subTest(item=item):
+                self.setUp()
+                pkmn = self.opponent_active
+                pkmn.item = item
+                pkmn.add_move("tackle")
+                pkmn.add_move("dragondance")
+                tackle_pp = pkmn.get_move("tackle").current_pp
+                with patch("fp.battle_modifier.logger.info") as logs:
+                    move(self.battle, ["", "move", "p2a: Caterpie", "Tackle"])
+                    move(self.battle, ["", "move", "p2a: Caterpie", "Dragon Dance"])
+                    start_volatile_status(
+                        self.battle, ["", "-start", "p2a: Caterpie", "confusion"]
+                    )
+                self.assertEqual(item, pkmn.item)
+                self.assertTrue(pkmn.can_have_choice_item)
+                self.assertEqual(set(), pkmn.impossible_items)
+                self.assertEqual(tackle_pp - 1, pkmn.get_move("tackle").current_pp)
+                self.assertEqual(
+                    "dragondance", self.battle.opponent.slot_a.last_used_move.move
+                )
+                self.assertIn("confusion", pkmn.volatile_statuses)
+                self.assertFalse(
+                    any(
+                        "cannot have a choice item" in line
+                        or "impossible items" in line
+                        for line in (str(call) for call in logs.call_args_list)
+                    )
+                )
 
-        move(self.battle, split_msg)
+    def test_inferred_choice_item_can_still_be_corrected(self):
+        pkmn = self.opponent_active
+        pkmn.item = "choiceband"
+        pkmn.item_inferred = True
+        move(self.battle, ["", "move", "p2a: Caterpie", "Tackle"])
+        move(self.battle, ["", "move", "p2a: Caterpie", "String Shot"])
+        self.assertEqual(constants.UNKNOWN_ITEM, pkmn.item)
+        self.assertFalse(pkmn.can_have_choice_item)
+        self.assertIn(constants.ASSAULT_VEST, pkmn.impossible_items)
 
-        self.assertFalse(self.battle.opponent.slot_a.active.can_have_choice_item)
+    def test_revealed_item_stops_further_inference(self):
+        pkmn = self.opponent_active
+        pkmn.item = "choiceband"
+        pkmn.item_inferred = True
+        set_item(self.battle, ["", "-item", "p2a: Caterpie", "Leftovers"])
+        move(self.battle, ["", "move", "p2a: Caterpie", "Dragon Dance"])
+        self.assertFalse(pkmn.item_inferred)
+        self.assertEqual(set(), pkmn.impossible_items)
+        self.assertTrue(pkmn.can_have_choice_item)
+
+    def test_removed_item_stops_further_inference(self):
+        pkmn = self.opponent_active
+        pkmn.item = "choiceband"
+        pkmn.item_inferred = True
+        remove_item(self.battle, ["", "-enditem", "p2a: Caterpie", "Choice Band"])
+        move(self.battle, ["", "move", "p2a: Caterpie", "Dragon Dance"])
+        self.assertIsNone(pkmn.item)
+        self.assertFalse(pkmn.item_inferred)
+        self.assertEqual(set(), pkmn.impossible_items)
+        self.assertTrue(pkmn.can_have_choice_item)
 
     def test_sets_life_orb_as_impossible_if_damaging_move_is_used(self):
         # if a damaging move is used, we no longer want to guess lifeorb as an item

@@ -714,6 +714,11 @@ class Pokemon:
         self.impossible_items = set()
         self.impossible_abilities = set()
 
+    @property
+    def item_known(self):
+        # Empty/removed items are known too; only hidden or guessed items need inference.
+        return self.item != constants.UNKNOWN_ITEM and not self.item_inferred
+
     @classmethod
     def from_dict(cls, pkmn_dict: dict, level=50):
         evs = []

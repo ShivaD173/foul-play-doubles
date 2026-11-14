@@ -790,7 +790,8 @@ def move(battle, split_msg):
     # if this pokemon used two different moves without switching,
     # set a flag to signify that it cannot have a choice item
     if (
-        is_opponent(battle, split_msg)
+        not pkmn.item_known
+        and is_opponent(battle, split_msg)
         and slot.last_used_move.pokemon_name == slot.active.name
         and slot.last_used_move.move != move_name
     ):
@@ -808,7 +809,7 @@ def move(battle, split_msg):
             )
             pkmn.item = constants.UNKNOWN_ITEM
 
-    if unlikely_to_have_choice_item(move_name):
+    if not pkmn.item_known and unlikely_to_have_choice_item(move_name):
         logger.info(
             "{} using {} makes it unlikely to have a choice item. Setting can_have_choice_item to False".format(
                 pkmn.name, move_name
@@ -819,7 +820,7 @@ def move(battle, split_msg):
     try:
         mv = all_move_json[move_name]
         move_type = mv[constants.TYPE]
-        if mv[constants.CATEGORY] != constants.STATUS:
+        if not pkmn.item_known and mv[constants.CATEGORY] != constants.STATUS:
             logger.info(
                 "{} used a {} move, removing {}gem from possible items".format(
                     pkmn.name, move_type, move_type
@@ -840,7 +841,10 @@ def move(battle, split_msg):
         pass
 
     try:
-        if all_move_json[move_name][constants.CATEGORY] == constants.STATUS:
+        if (
+            not pkmn.item_known
+            and all_move_json[move_name][constants.CATEGORY] == constants.STATUS
+        ):
             logger.info(
                 "{} used a status-move. Adding `assaultvest` to impossible items".format(
                     pkmn.name
@@ -872,11 +876,15 @@ def move(battle, split_msg):
 
     # if this pokemon used a damaging move, eliminate the possibility of guessing a lifeorb
     # the lifeorb will reveal itself if it has it
-    if category in constants.DAMAGING_CATEGORIES and not any(
-        [
-            normalize_name(a) in ["sheerforce", "magicguard"]
-            for a in pokedex[pkmn.name][constants.ABILITIES].values()
-        ]
+    if (
+        not pkmn.item_known
+        and category in constants.DAMAGING_CATEGORIES
+        and not any(
+            [
+                normalize_name(a) in ["sheerforce", "magicguard"]
+                for a in pokedex[pkmn.name][constants.ABILITIES].values()
+            ]
+        )
     ):
         logger.info(
             "{} used a damaging move - not guessing lifeorb anymore".format(pkmn.name)
@@ -1147,8 +1155,11 @@ def start_volatile_status(battle, split_msg):
         pkmn.volatile_status_durations[constants.SLOW_START] = 6
 
     if volatile_status == constants.CONFUSION:
-        logger.info("{} got confused, no longer guessing lumberry".format(pkmn.name))
-        pkmn.impossible_items.add("lumberry")
+        if not pkmn.item_known:
+            logger.info(
+                "{} got confused, no longer guessing lumberry".format(pkmn.name)
+            )
+            pkmn.impossible_items.add("lumberry")
         if split_msg[-1] == "[fatigue]":
             logger.info(
                 "{} got confused from fatigue, removing lockedmove from volatile statuses".format(
@@ -1498,6 +1509,7 @@ def set_item(battle, split_msg):
     side, _, slot, pkmn = get_side_slot_active(battle, split_msg)
     item = normalize_name(split_msg[3].strip())
     pkmn.item = item
+    pkmn.item_inferred = False
 
     # if (
     #     len(split_msg) >= 5
@@ -1546,6 +1558,7 @@ def remove_item(battle, split_msg):
     item = normalize_name(split_msg[3].strip())
     logger.info("Removing {}'s item: {}".format(slot.active.name, item))
     slot.active.item = None
+    slot.active.item_inferred = False
 
     if slot.active.removed_item is None:
         logger.info("Setting {}'s removed item to {}".format(slot.active.name, item))
